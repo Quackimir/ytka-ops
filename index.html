@@ -1126,51 +1126,71 @@ function removeUser(name) {
 // ── MOVE TASK BETWEEN GROUPS ──────────────────────────────────────
 function openMoveTaskMenu(rowIndex, event) {
   event.stopPropagation();
-  // Close any open menus
-  document.querySelectorAll('.move-menu.open').forEach(function(m) { m.classList.remove('open'); });
-  var menuId = 'move-menu-' + rowIndex;
-  var existing = document.getElementById(menuId);
-  if (existing) { existing.classList.add('open'); return; }
+  // Remove any existing menus
+  var existing = document.getElementById('active-move-menu');
+  if (existing) { existing.remove(); return; }
 
-  var menu = document.createElement('div');
-  menu.className = 'move-menu open';
-  menu.id = menuId;
-
-  // Get all groups
+  var btn = event.currentTarget;
+  var rect = btn.getBoundingClientRect();
   var groups = ['General'].concat(taskGroups);
   var cols = getColOrder();
 
-  var heading = document.createElement('div');
-  heading.style.cssText = 'padding:6px 14px;font-family:Space Mono,monospace;font-size:9px;letter-spacing:0.2em;color:var(--muted);border-bottom:var(--border)';
-  heading.textContent = 'MOVE TO GROUP';
-  menu.appendChild(heading);
+  var menu = document.createElement('div');
+  menu.id = 'active-move-menu';
+  menu.style.cssText = [
+    'position:fixed',
+    'z-index:99999',
+    'background:var(--bone)',
+    'border:2px solid var(--ink)',
+    'box-shadow:4px 4px 0 var(--ink)',
+    'min-width:200px',
+    'max-height:400px',
+    'overflow-y:auto',
+    'top:' + Math.min(rect.bottom + 4, window.innerHeight - 300) + 'px',
+    'left:' + Math.min(rect.left, window.innerWidth - 210) + 'px',
+  ].join(';');
 
+  function mkHead(txt) {
+    var h = document.createElement('div');
+    h.style.cssText = 'padding:5px 12px;font-family:Space Mono,monospace;font-size:9px;letter-spacing:0.2em;color:var(--muted);background:var(--bone-soft);border-bottom:1px solid rgba(10,10,10,0.15);text-transform:uppercase';
+    h.textContent = txt;
+    return h;
+  }
+
+  function mkItem(label, fn) {
+    var el = document.createElement('div');
+    el.style.cssText = 'padding:10px 14px;font-family:Bebas Neue,sans-serif;font-size:14px;letter-spacing:0.1em;cursor:pointer;border-bottom:1px solid rgba(10,10,10,0.06)';
+    el.textContent = label;
+    el.addEventListener('mouseenter', function(){ this.style.background='var(--acid)'; });
+    el.addEventListener('mouseleave', function(){ this.style.background=''; });
+    el.addEventListener('mousedown', function(e) {
+      e.preventDefault(); e.stopPropagation();
+      menu.remove();
+      fn();
+    });
+    return el;
+  }
+
+  menu.appendChild(mkHead('Move to group'));
   groups.forEach(function(g) {
-    var item = document.createElement('div');
-    item.className = 'move-menu-item';
-    item.textContent = g.toUpperCase();
-    item.dataset.group = g;
-    item.dataset.row = rowIndex;
-    item.onclick = function() { moveTaskToGroup(parseInt(this.dataset.row), this.dataset.group); menu.remove(); };
-    menu.appendChild(item);
+    menu.appendChild(mkItem(g, function(){ moveTaskToGroup(parseInt(rowIndex), g); }));
   });
-
-  var colHeading = document.createElement('div');
-  colHeading.style.cssText = 'padding:6px 14px;font-family:Space Mono,monospace;font-size:9px;letter-spacing:0.2em;color:var(--muted);border-top:var(--border);border-bottom:var(--border)';
-  colHeading.textContent = 'MOVE TO COLUMN';
-  menu.appendChild(colHeading);
-
+  menu.appendChild(mkHead('Move to column'));
   cols.forEach(function(c) {
-    var item = document.createElement('div');
-    item.className = 'move-menu-item';
-    item.textContent = c.toUpperCase() + ' →';
-    item.dataset.col = c;
-    item.dataset.row = rowIndex;
-    item.onclick = function() { moveTaskToCol(parseInt(this.dataset.row), this.dataset.col); menu.remove(); };
-    menu.appendChild(item);
+    menu.appendChild(mkItem(c + '  →', function(){ moveTaskToCol(parseInt(rowIndex), c); }));
   });
 
-  event.currentTarget.appendChild(menu);
+  document.body.appendChild(menu);
+
+  setTimeout(function() {
+    function closeOnClick(e) {
+      if (!menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener('mousedown', closeOnClick);
+      }
+    }
+    document.addEventListener('mousedown', closeOnClick);
+  }, 50);
 }
 
 async function moveTaskToGroup(rowIndex, newGroup) {
@@ -1555,9 +1575,9 @@ function render(page) {
     tasks:       renderKanban,
     ideas:       renderIdeas,
     roadmap:     renderRoadmap,
-    team:        function(){ if(typeof renderTeam==='function') renderTeam(); },
-    activitylog: function(){ if(typeof renderActivityLog==='function') renderActivityLog(); },
-    devtools:    function(){ if(typeof renderDevTools==='function') renderDevTools(); },
+    team:        renderTeam,
+    activitylog: renderActivityLog,
+    devtools:    renderDevTools,
   };
   if (map[page]) { map[page](); return; }
   renderTable(page);
